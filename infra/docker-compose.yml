@@ -1,0 +1,27 @@
+services:
+  api:
+    build:
+      context: ../apps/api
+    container_name: plankiller-api
+    env_file:
+      - path: ../.env
+        required: false
+    ports:
+      - "8710:8710"
+    volumes:
+      - ../data:/app/data
+      - ../backups:/app/backups
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../apps/api
+    container_name: plankiller-worker
+    env_file:
+      - path: ../.env
+        required: false
+    command: ["python", "-m", "app.worker"]
+    volumes:
+      - ../data:/app/data
+      - ../backups:/app/backups
+    restart: unless-stopped
