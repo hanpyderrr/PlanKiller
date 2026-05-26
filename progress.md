@@ -1,5 +1,36 @@
 # Progress
 
+## 2026-05-26
+
+- 已将 `plankiller` 复制到 `E:\vs-workspace\plankiller`，并上传到 GitHub：
+  - `https://github.com/hanpyderrr/PlanKiller.git`
+  - 初始提交：`37bb0d8 chore: initial PlanKiller import`
+- 为本机 PC 开发版启动完成依赖准备：
+  - 后端：在 `apps/api` 下创建 `.venv`。
+  - 后端依赖：使用 `.venv\Scripts\python -m pip install -r requirements.txt` 安装完成。
+  - 前端：`apps/desktop/node_modules` 已存在，可直接运行 `npm run dev`。
+- 已启动本机服务并验证：
+  - 后端 API：`http://127.0.0.1:8710`
+  - 前端 PC 界面：`http://127.0.0.1:5173`
+  - `/health` 返回 `status: ok`
+  - 前端首页 HTTP 状态码 `200`
+- 手动打开方式：
+  - 后端：
+    ```powershell
+    cd E:\vs-workspace\plankiller\apps\api
+    .\.venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8710
+    ```
+  - 前端：
+    ```powershell
+    cd E:\vs-workspace\plankiller\apps\desktop
+    npm run dev
+    ```
+  - 浏览器访问：`http://127.0.0.1:5173`
+- 备注：
+  - 当前是浏览器/Vite 开发版，不是 Tauri 安装版。
+  - `.venv`、`node_modules`、`dist`、`data/` 均应保持忽略，不提交。
+  - 真正桌面安装包仍需重建 PyInstaller sidecar 和 Tauri NSIS 包。
+
 ## 2026-05-14
 
 - 查看 `E:\vs-workspace`，确认根目录不是 git 仓库。

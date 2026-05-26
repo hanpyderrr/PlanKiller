@@ -1,20 +1,24 @@
 # 习惯管理路由：创建习惯、列表（附带今日打卡状态）、打卡（upsert）、历史日志查询
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Habit, HabitLog
 from ..schemas import HabitCreate, HabitLogCreate, HabitLogRead, HabitRead, HabitReorderRequest, HabitUpdate
+from ..services import today_in_timezone
 
 router = APIRouter(prefix="/habits", tags=["habits"])
 
 
 @router.post("", response_model=HabitRead)
 def create_habit(payload: HabitCreate, db: Session = Depends(get_db)) -> Habit:
-    habit = Habit(**payload.model_dump())
+    max_pos = db.scalar(select(func.max(Habit.position))) or 0
+    data = payload.model_dump()
+    data["position"] = max_pos + 1
+    habit = Habit(**data)
     db.add(habit)
     db.commit()
     db.refresh(habit)
@@ -34,18 +38,32 @@ def reorder_habits(payload: HabitReorderRequest, db: Session = Depends(get_db)) 
 
 @router.get("", response_model=list[HabitRead])
 def list_habits(log_date: date | None = None, db: Session = Depends(get_db)) -> list[HabitRead]:
-    """返回所有习惯，同时注入指定日期（默认今天）的打卡状态到 today_status 字段。"""
+    """返回所有习惯，注入今日打卡状态和本周完成次数。"""
     habits = list(db.scalars(select(Habit).order_by(Habit.position.asc(), Habit.name)).all())
-    target = log_date or date.today()
-    # 当天所有打卡记录索引成 {habit_id: status}，方便 O(1) 查找
-    logs = {
+    target = log_date or today_in_timezone()
+    week_start = target - timedelta(days=target.weekday())  # 本周一
+
+    today_logs = {
         log.habit_id: log.status
         for log in db.scalars(select(HabitLog).where(HabitLog.log_date == target)).all()
     }
+    # 本周每个习惯的 done 次数
+    week_counts: dict[int, int] = {}
+    for log in db.scalars(
+        select(HabitLog).where(HabitLog.log_date >= week_start, HabitLog.log_date <= target, HabitLog.status == "done")
+    ).all():
+        week_counts[log.habit_id] = week_counts.get(log.habit_id, 0) + 1
+
     result = []
     for habit in habits:
         item = HabitRead.model_validate(habit)
-        item.today_status = logs.get(habit.id)  # 未打卡时为 None
+        item.today_status = today_logs.get(habit.id)
+        item.week_done_count = week_counts.get(habit.id, 0)
+        try:
+            scheduled_days = {int(day) for day in (habit.schedule_days or "0,1,2,3,4,5,6").split(",") if day.strip() != ""}
+        except ValueError:
+            scheduled_days = set(range(7))
+        item.is_scheduled_today = target.weekday() in scheduled_days
         result.append(item)
     return result
 

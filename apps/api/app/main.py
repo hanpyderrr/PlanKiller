@@ -41,6 +41,16 @@ async def lifespan(app: FastAPI):
             _conn.commit()
         except Exception:
             pass
+        try:
+            _conn.execute(text("ALTER TABLE habits ADD COLUMN times_per_week INTEGER NOT NULL DEFAULT 7"))
+            _conn.commit()
+        except Exception:
+            pass
+        try:
+            _conn.execute(text("ALTER TABLE habits ADD COLUMN schedule_days VARCHAR(20) DEFAULT '0,1,2,3,4,5,6'"))
+            _conn.commit()
+        except Exception:
+            pass
     with SessionLocal() as db:
         seed_default_reminders(db)
     yield

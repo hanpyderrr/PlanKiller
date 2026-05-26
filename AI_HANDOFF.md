@@ -2,6 +2,89 @@
 
 Claude Code 与 Codex 之间的实现交接记录，最新条目在最上方。
 
+## 2026-05-26 - Claude 交接（历史页重构 + 复盘改名 + 执行状态高度）
+
+### 摘要
+- 历史页重写：去掉本周模式面板，新增本月日历格（7列，按星期对齐，每格显示完成率%，颜色编码）
+- 历史页顶部指标改为本月维度：完成率、完成任务数、记录天数
+- 历史页新增"查看历史"切换按钮，点击展开/收起逐日列表
+- 导航标签"下班复盘"→"今日复盘"，历史tab"历史周报"→"历史"，ReviewPage 标题同步更新
+- PlanPage 执行状态 taskList 增加 maxHeight:220 + overflowY:auto，限制过长滚动
+
+### 修改文件
+- `apps/desktop/src/main.tsx` — HistoryPage 重写；nav tab 改名；ReviewPage 标题改名；taskList 高度限制
+- `apps/desktop/src/styles.css` — 新增 .monthGrid / .dayCell 系列 CSS 类
+
+### 验证
+- `npm run build` — 通过（tsc && vite build，222KB JS）
+
+### 已知问题
+- history prop 仅含最近30天数据，历史列表展示范围同步
+
+---
+
+## 2026-05-26 - Claude 交接（时区修复 + 习惯排序 + /info 增强）
+
+### 摘要
+- 前端 `main.tsx` 新增 `localDateStr()`，替换两处 `toISOString().slice(0,10)` UTC 日期，消除中国时区凌晨写错日期的风险
+- 后端 `habits.py` 将 `date.today()` 改为 `today_in_timezone()`，保持与 Settings.timezone 一致
+- 后端 `habits.py` `create_habit` 自动分配 `position = max+1`，新建习惯不再全为 0
+- 后端 `health.py` `/info` 增强：新增返回 `timezone`、`today`、`db_path`
+
+### 修改文件
+- `apps/desktop/src/main.tsx` — 新增 `localDateStr()`，替换第 19、62 行
+- `apps/api/app/routers/habits.py` — `create_habit` position 自增；`list_habits` 改用 `today_in_timezone()`
+- `apps/api/app/routers/health.py` — `/info` 返回 4 个字段
+
+### 验证
+- `npm run build` — 通过
+- `.\.venv\Scripts\python -m pytest -v` — 8 passed
+
+### 已知问题
+- 无新增遗留问题；AI_REVIEW.md 所有 OPEN 项已全部标记 FIXED
+
+---
+
+## 2026-05-26 - Codex 交接（本机 PC 端启动方式）
+
+### 摘要
+- 已在 `E:\vs-workspace\plankiller\apps\api` 创建项目独立后端虚拟环境 `.venv`。
+- 已通过 `.venv` 安装 `apps/api/requirements.txt` 中的 FastAPI、uvicorn、SQLAlchemy、pytest 等后端依赖。
+- 前端 `apps/desktop/node_modules` 已存在，可直接运行 Vite 开发服务。
+- 已后台启动后端 API 和前端开发服务器，并打开本机浏览器版 PC 界面。
+
+### 打开方式
+后端：
+```powershell
+cd E:\vs-workspace\plankiller\apps\api
+.\.venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8710
+```
+
+前端：
+```powershell
+cd E:\vs-workspace\plankiller\apps\desktop
+npm run dev
+```
+
+访问：
+```text
+http://127.0.0.1:5173
+```
+
+### 验证
+```powershell
+Invoke-RestMethod -Uri http://127.0.0.1:8710/health
+# status: ok
+
+Invoke-WebRequest -Uri http://127.0.0.1:5173 -UseBasicParsing
+# StatusCode: 200
+```
+
+### 备注
+- 当前打开的是浏览器/Vite 开发版 PC 界面，不是已打包的 Tauri 安装版。
+- `.venv`、`node_modules`、`dist`、SQLite `data/` 目录均已被 `.gitignore` 忽略，不应提交。
+- 若要做真正桌面安装包，仍需重建 PyInstaller sidecar 并运行 `npm run tauri:build`。
+
 ## 2026-05-25 - Codex 交接（PlanKiller 新项目 + RAG 合入）
 
 ### 摘要

@@ -4,6 +4,24 @@ Codex 审查记录、验证结果和遗留风险，最新条目在最上方。
 
 ---
 
+## 2026-05-26 - Codex Review（待优化记录）
+
+### 发现问题
+- [x] FIXED - 高：`apps/desktop/src/main.tsx:19`、`apps/desktop/src/main.tsx:58` - 前端通过 `new Date().toISOString().slice(0, 10)` 计算业务日期。已新增 `localDateStr()` 函数用本地时区替换，`today` 和 `thirtyDaysAgo` 均已修复。
+- [x] FIXED - 高：`apps/api/app/routers/habits.py:39` - `date.today()` 改为 `today_in_timezone()`，已从 services 导入。
+- [x] FIXED - 中：`apps/api/app/routers/health.py` - `/info` 增强，现返回 `data_dir`、`timezone`、`today`、`db_path`。
+- [x] FIXED - 中：`apps/api/app/routers/habits.py` `create_habit` - 新习惯 position 自动设为 `max(existing) + 1`，避免全部为 0 导致排序无效。
+
+### 验证结果（2026-05-26）
+- `npm run build` — 通过，tsc && vite build 成功
+- `.\.venv\Scripts\python -m pytest -v` — 8 passed
+
+### 遗留风险
+- 前端 `today` 在应用启动时固定，跨午夜不刷新（属设计取舍，不影响正确性）。
+- 手动验证凌晨边界需模拟系统时间，未自动化覆盖。
+
+---
+
 ## 2026-05-25 - Codex Review
 
 ### 发现问题

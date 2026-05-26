@@ -1,10 +1,12 @@
 import re
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import get_settings
 from ..database import get_db
 from ..models import Reminder
 from ..schemas import ReminderCreate, ReminderRead
@@ -32,7 +34,7 @@ def snooze_reminder(reminder_id: int, minutes: int = 10, db: Session = Depends(g
     reminder = db.get(Reminder, reminder_id)
     if reminder is None:
         raise HTTPException(status_code=404, detail="Reminder not found")
-    reminder.next_run_at = datetime.now() + timedelta(minutes=minutes)
+    reminder.next_run_at = datetime.now(ZoneInfo(get_settings().timezone)) + timedelta(minutes=minutes)
     reminder.active = True
     db.commit()
     db.refresh(reminder)

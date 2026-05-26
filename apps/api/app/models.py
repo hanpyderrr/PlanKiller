@@ -76,6 +76,7 @@ class Habit(TimestampMixin, Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     emoji: Mapped[str] = mapped_column(String(8), default="✨")   # 用户自选 emoji
     position: Mapped[int] = mapped_column(Integer, default=0)     # 排序位置
+    schedule_days: Mapped[str] = mapped_column(String(20), default="0,1,2,3,4,5,6")  # 0=Mon...6=Sun
 
     logs: Mapped[list["HabitLog"]] = relationship(back_populates="habit", cascade="all, delete-orphan")
 

@@ -75,9 +75,15 @@ async def ask_ai(
     message: str,
     context: dict[str, object],
     memory_hits: list[MemoryHit] | None = None,
+    override_api_key: str = "",
 ) -> tuple[str, str]:
     settings = get_settings()
-    if settings.deepseek_api_key:
+    if override_api_key:
+        api_key = override_api_key
+        base_url = "https://api.openai.com"
+        model = settings.openai_model
+        provider = "openai-user-key"
+    elif settings.deepseek_api_key:
         api_key = settings.deepseek_api_key
         base_url = "https://api.deepseek.com"
         model = settings.deepseek_model
@@ -179,7 +185,7 @@ def build_reminder_context(db: Session, reminder: Reminder) -> dict[str, object]
     )
     context: dict[str, object] = {
         "today_focus": plan.focus if plan else "",
-        "unfinished_high_priority": [item.title for item in (plan.items if plan else []) if not item.done and item.priority == 1],
+        "unfinished_high_priority": [item.title for item in (plan.items if plan else []) if not item.done and item.priority == 3],
         "recent_blocker": plan.review.blockers if plan and plan.review else "",
     }
     if reminder.target_type == "habit" and reminder.target_id is not None:
@@ -363,8 +369,7 @@ def compute_report(db: Session, start: date, end: date) -> dict[str, object]:
     ).all()
     total_items = sum(len(plan.items) for plan in plans)
     completed_items = sum(1 for plan in plans for item in plan.items if item.done)
-    active_habits = db.scalar(select(func.count(Habit.id)).where(Habit.active.is_(True))) or 0
-    day_count = max((end - start).days + 1, 1)
+    active_habits_list = db.scalars(select(Habit).where(Habit.active.is_(True))).all()
     habit_logs = (
         db.scalar(
             select(func.count(HabitLog.id)).where(
@@ -375,7 +380,12 @@ def compute_report(db: Session, start: date, end: date) -> dict[str, object]:
         )
         or 0
     )
-    habit_possible = active_habits * day_count
+    habit_possible = 0
+    for habit in active_habits_list:
+        scheduled = {int(d) for d in (habit.schedule_days or "0,1,2,3,4,5,6").split(",") if d.strip().isdigit()}
+        for offset in range((end - start).days + 1):
+            if (start + timedelta(days=offset)).weekday() in scheduled:
+                habit_possible += 1
     patterns = compute_patterns(db, start, end)
     return {
         "start_date": start,

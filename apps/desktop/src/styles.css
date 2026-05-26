@@ -1094,3 +1094,65 @@ code {
   line-height: 1.6;
   white-space: pre-wrap;
 }
+
+/* ===== 月历日历格 ===== */
+.monthGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.dayCell {
+  border-radius: 6px;
+  text-align: center;
+  padding: 5px 2px;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--cream-2);
+}
+
+.dayCell.weekHeader {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  background: none;
+  min-height: unset;
+  padding: 2px 0;
+}
+
+.dayCell.empty {
+  background: transparent;
+}
+
+.dayCell .dayNum {
+  font-size: 10px;
+  color: var(--text-3);
+  line-height: 1;
+}
+
+.dayCell .dayPct {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1;
+}
+
+.dayCell.future {
+  background: var(--cream);
+  opacity: 0.45;
+}
+
+.dayCell.done-none { background: var(--cream-2); }
+.dayCell.done-low  { background: #ffe0e0; }
+.dayCell.done-mid  { background: #fff3cd; }
+.dayCell.done-high { background: #d4edda; }
+.dayCell.done-full { background: #b8ddb8; }
+
+.dayCell.today {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}

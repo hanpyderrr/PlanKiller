@@ -2,6 +2,9 @@
 import os
 from fastapi import APIRouter
 
+from ..config import get_settings
+from ..services import today_in_timezone
+
 router = APIRouter(tags=["health"])
 
 
@@ -13,5 +16,12 @@ def health() -> dict[str, str]:
 @router.get("/info")
 def info() -> dict[str, str]:
     """返回运行时信息：数据目录路径（桌面端由 Tauri 注入 DC_DATA_DIR）。"""
+    settings = get_settings()
     data_dir = os.environ.get("DC_DATA_DIR", "")
-    return {"data_dir": data_dir}
+    db_path = settings.database_url.removeprefix("sqlite:///")
+    return {
+        "data_dir": data_dir,
+        "timezone": settings.timezone,
+        "today": today_in_timezone().isoformat(),
+        "db_path": db_path,
+    }

@@ -41,7 +41,15 @@ def list_manual(db: Session = Depends(get_db)):
 
 @router.patch("/manual/{memory_id}", response_model=ManualMemoryRead)
 def update_manual(memory_id: int, payload: ManualMemoryUpdate, db: Session = Depends(get_db)):
-    document = update_manual_memory(db, memory_id, title=payload.title, content=payload.content, target_date=payload.target_date)
+    clear_target = "target_date" in payload.model_fields_set and payload.target_date is None
+    document = update_manual_memory(
+        db,
+        memory_id,
+        title=payload.title,
+        content=payload.content,
+        target_date=payload.target_date,
+        clear_target_date=clear_target,
+    )
     if document is None:
         raise HTTPException(status_code=404, detail="Manual memory not found")
     return document

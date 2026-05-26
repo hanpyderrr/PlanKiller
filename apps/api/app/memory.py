@@ -255,6 +255,7 @@ def update_manual_memory(
     title: str | None = None,
     content: str | None = None,
     target_date: date | None = None,
+    clear_target_date: bool = False,
 ) -> MemoryDocument | None:
     document = db.get(MemoryDocument, memory_id)
     if document is None or document.source_type != "manual":
@@ -264,7 +265,9 @@ def update_manual_memory(
     if content is not None:
         document.content = content.strip()
         _replace_chunks(document, document.content)
-    if target_date is not None:
+    if clear_target_date:
+        document.target_date = None
+    elif target_date is not None:
         document.target_date = target_date
     db.commit()
     db.refresh(document)

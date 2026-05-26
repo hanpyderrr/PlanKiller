@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class PlanItemCreate(BaseModel):
+    id: int | None = None
     title: str = Field(min_length=1, max_length=240)
     category: str = "work"
     priority: int = Field(default=2, ge=1, le=3)
@@ -71,11 +72,14 @@ class HabitCreate(BaseModel):
     active: bool = True
     emoji: str = "✨"
     position: int = 0
+    schedule_days: str = "0,1,2,3,4,5,6"
 
 
 class HabitRead(HabitCreate):
     id: int
-    today_status: str | None = None  # 当天打卡状态（done/skip），由 router 查询后注入，非数据库字段
+    today_status: str | None = None  # 当天打卡状态（done/skip），由 router 注入
+    week_done_count: int = 0          # 本周已完成次数，由 router 注入
+    is_scheduled_today: bool = True   # 当天是否在计划日内，由 router 注入
 
     model_config = {"from_attributes": True}
 
@@ -88,6 +92,7 @@ class HabitUpdate(BaseModel):
     active: bool | None = None
     emoji: str | None = None
     position: int | None = None
+    schedule_days: str | None = None
 
 
 class HabitReorderItem(BaseModel):

@@ -31,12 +31,23 @@ def upsert_plan(payload: DailyPlanCreate, db: Session = Depends(get_db)) -> Dail
     plan.focus = payload.focus
     plan.energy_level = payload.energy_level
     plan.notes = payload.notes
-    # 按 title 匹配保留 done 状态：同名条目复用，新增条目创建，移除的条目删除
-    existing_by_title = {item.title: item for item in plan.items}
+    # 优先按 id 匹配保留 done 状态；兼容旧前端未传 id 时的 title 匹配。
+    existing_by_id: dict[int, PlanItem] = {item.id: item for item in plan.items}
+    existing_by_title: dict[str, PlanItem] = {item.title: item for item in plan.items}
+    matched_ids: set[int] = set()
     new_items: list[PlanItem] = []
     for position, item_data in enumerate(payload.items):
-        existing = existing_by_title.pop(item_data.title, None)
+        existing = None
+        if item_data.id is not None and item_data.id in existing_by_id:
+            existing = existing_by_id[item_data.id]
+            matched_ids.add(existing.id)
+        elif item_data.title in existing_by_title:
+            cand = existing_by_title[item_data.title]
+            if cand.id not in matched_ids:
+                existing = cand
+                matched_ids.add(cand.id)
         if existing:
+            existing.title = item_data.title
             existing.category = item_data.category
             existing.priority = item_data.priority
             existing.estimated_minutes = item_data.estimated_minutes
@@ -54,8 +65,9 @@ def upsert_plan(payload: DailyPlanCreate, db: Session = Depends(get_db)) -> Dail
                 end_time=item_data.end_time,        # 新增
                 position=position,
             ))
-    for removed in existing_by_title.values():
-        db.delete(removed)
+    for item in plan.items:
+        if item.id not in matched_ids:
+            db.delete(item)
     plan.items = new_items
     db.commit()
     return _load_plan(db, payload.plan_date)  # type: ignore[return-value]

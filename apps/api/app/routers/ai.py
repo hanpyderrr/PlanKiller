@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -13,19 +13,27 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 
 @router.post("/chat", response_model=AiResponse)
-async def chat(payload: AiChatRequest, db: Session = Depends(get_db)) -> AiResponse:
+async def chat(
+    payload: AiChatRequest,
+    db: Session = Depends(get_db),
+    x_ai_key: str = Header(default="", alias="X-AI-Key"),
+) -> AiResponse:
     context = get_plan_summary(db)
     memory_hits = search_memory(db, payload.message, top_k=get_settings().rag_top_k)
-    content, provider = await ask_openai(payload.message, context, memory_hits)
+    content, provider = await ask_openai(payload.message, context, memory_hits, x_ai_key)
     save_ai_exchange(db, payload.message, content)
     return AiResponse(content=content, used_provider=provider, memory_hits=memory_hits)
 
 
 @router.post("/daily-review/{target_date}", response_model=AiResponse)
-async def daily_review(target_date: date, db: Session = Depends(get_db)) -> AiResponse:
+async def daily_review(
+    target_date: date,
+    db: Session = Depends(get_db),
+    x_ai_key: str = Header(default="", alias="X-AI-Key"),
+) -> AiResponse:
     context = get_plan_summary(db)
     message = f"请分析 {target_date.isoformat()} 的计划完成情况，给出短总结和明天建议。"
-    content, provider = await ask_openai(message, context)
+    content, provider = await ask_openai(message, context, None, x_ai_key)
     save_ai_exchange(db, message, content, insight_type="daily-review")
     return AiResponse(content=content, used_provider=provider)
 
