@@ -1,4 +1,5 @@
 # 应用入口：创建 FastAPI 实例，挂载所有路由，启动时建表并写入默认提醒
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,6 +9,7 @@ from sqlalchemy import text
 from .database import SessionLocal, engine, init_db
 from .routers import ai, habits, health, memory, plans, qq, reminders
 from .services import seed_default_reminders
+from .worker import reminder_loop
 
 
 @asynccontextmanager
@@ -53,7 +55,10 @@ async def lifespan(app: FastAPI):
             pass
     with SessionLocal() as db:
         seed_default_reminders(db)
+    _worker_task = asyncio.create_task(reminder_loop())
     yield
+    _worker_task.cancel()
+    await asyncio.gather(_worker_task, return_exceptions=True)
 
 
 app = FastAPI(title="PlanKiller API", version="0.1.0", lifespan=lifespan)

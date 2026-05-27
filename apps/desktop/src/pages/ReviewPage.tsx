@@ -1,16 +1,21 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { DailyPlan, apiRequest } from "../api";
-import { today } from "../utils";
+import { localDateStr } from "../utils";
 
 function ReviewPage({ apiBase, plan, onSaved }: { apiBase: string; plan: DailyPlan | null; onSaved: () => void }) {
   const [summary, setSummary] = useState(plan?.review?.completed_summary || "");
   const [tomorrow, setTomorrow] = useState(plan?.review?.tomorrow_hint || "");
+
+  useEffect(() => {
+    setSummary(plan?.review?.completed_summary || "");
+    setTomorrow(plan?.review?.tomorrow_hint || "");
+  }, [plan]);
   const [reviewStatus, setReviewStatus] = useState<"idle" | "saved" | "error">("idle");
 
   async function save() {
     try {
       await apiRequest(
-        `/plans/${today}/review`,
+        `/plans/${localDateStr()}/review`,
         { method: "POST", body: JSON.stringify({ completed_summary: summary, blockers: "", mood: "steady", tomorrow_hint: tomorrow }) },
         apiBase,
       );

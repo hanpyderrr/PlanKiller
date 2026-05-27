@@ -2,57 +2,58 @@
 
 PlanKiller 是一个单仓库个人日常管理应用：
 
-- 后端：FastAPI + SQLAlchemy + SQLite，入口在 `apps/api/app/main.py`，路由在 `apps/api/app/routers/*`，核心业务集中在 `services.py` 和 `memory.py`。
-- 前端：React + TypeScript + Vite，主要 UI 全在 `apps/desktop/src/main.tsx`，API 封装在 `apps/desktop/src/api.ts`。
-- 桌面：Tauri v2 启动 Python sidecar，`apps/desktop/src-tauri/src/lib.rs` 注入 `DC_DATA_DIR`。
-- 部署：`infra/docker-compose.yml` 启动 `api` 和 `worker` 两个容器，共享 SQLite 数据目录。
-- 当前工作树已有未提交修改，且 `docs/agent-work/` 为未跟踪目录；本次只读审计未修改文件，也未读取 `.env` 等凭据文件。
+- 后端：FastAPI + SQLAlchemy + SQLite，入口在 `apps/api/app/main.py`，路由在 `apps/api/app/routers/*`，核心逻辑集中在 `apps/api/app/services.py` 和 `apps/api/app/memory.py`。
+- 前端：React + TypeScript + Vite，入口已拆为 `apps/desktop/src/main.tsx`，页面在 `apps/desktop/src/pages/*`，API 封装在 `apps/desktop/src/api.ts`。
+- 桌面：Tauri v2 通过 `apps/desktop/src-tauri/src/lib.rs` 启动 Python sidecar，并注入 `DC_DATA_DIR`。
+- 部署：`infra/docker-compose.yml` 运行 `api` 和 `worker` 两个容器，共享 SQLite 数据目录。
+- 当前只读审计未修改文件，未读取 `.env`、数据库、token、credential 文件；未运行会写入数据库或构建产物的测试/构建命令。
 
 2. Architecture Assessment
 
-整体分层清晰：前端通过 `apiRequest`/`aiRequest` 调 FastAPI，FastAPI 路由调用 SQLAlchemy Session 和服务函数，AI/RAG/QQ/Reminder 逻辑在服务层，SQLite 作为单用户持久化。
+整体分层已经比旧状态清晰：前端页面拆分完成，`main.tsx` 主要承担 App shell、全局状态和路由切换；后端路由、模型、schema、服务层分工基本明确。
 
 主要架构风险：
 
-- 前端边界过厚：`apps/desktop/src/main.tsx` 有 1456 行，页面、状态、表单、业务调用、展示逻辑全部在一个文件，后续功能变更容易产生回归。
-- 后端服务层过宽：`apps/api/app/services.py` 同时负责 AI、QQ token、提醒调度、报表、时区、记忆索引触发，模块职责已经混杂。
-- 数据迁移是启动时 ad hoc SQL：`apps/api/app/main.py:18-53` 连续 `ALTER TABLE` 并吞掉所有异常，没有版本表、没有失败可观测性，也只在 API lifespan 执行。`worker` 只调用 `init_db()`，不会执行这些迁移。
-- Docker 中 API 和 worker 两个进程共享 SQLite：`infra/docker-compose.yml:1-27`，但数据库未配置 WAL/busy timeout。提醒派发、RAG 重建、前端写入并发时，SQLite 锁竞争风险较高。
-- RAG 重建是同步全量重建：`apps/api/app/memory.py:202-232` 删除所有非手动 memory 后重新索引；由 HTTP `/memory/reindex` 直接触发，数据多时会阻塞请求并放大 OpenAI embedding 调用成本。
+- 桌面版提醒不会自动派发。Tauri sidecar 只启动 `uvicorn app.main:app`，见 `apps/api/run_server.py:26-31` 和 `apps/desktop/src-tauri/src/lib.rs:20-27`；自动轮询只存在于 `apps/api/app/worker.py:11-18`，但桌面打包未启动 worker。结果是桌面用户不手动调用 `/reminders/dispatch-due` 时，定时提醒不会按时发送。
+- 迁移逻辑仍是 ad hoc SQL 且静默吞异常：`apps/api/app/main.py:18-53`。这会掩盖真实迁移失败，并且 `worker` 只调用 `init_db()`，不走同一迁移路径。
+- Docker 中 API 与 worker 两个进程共享 SQLite：`infra/docker-compose.yml:1-27`。当前数据库连接未配置 WAL、busy timeout 或任务级锁；提醒派发、RAG 全量重建、前端写入并发时有锁竞争和重复派发风险。
+- RAG 重建是同步全量重建：`apps/api/app/memory.py:202-232` 删除非手动记忆后重建。数据变多或 embedding 可用时，会阻塞 HTTP 请求并放大外部 API 成本。
+- 后端服务层职责偏宽：`apps/api/app/services.py` 同时处理 AI、QQ、提醒、报表、时区、记忆重建触发，后续变更容易互相牵连。
 
 3. Code Quality Issues
 
-- `apps/api/app/main.py:22-52` 捕获 `Exception` 后静默 `pass`，会掩盖真实迁移失败、权限问题或 SQL 兼容问题。建议至少只捕获预期的 duplicate-column/rename-failed 情况并记录日志。
-- `apps/api/app/schemas.py:66-74`、`apps/api/app/schemas.py:106-109` 对 `schedule_days`、`reminder_time`、`HabitLog.status` 等使用自由字符串，缺少枚举和格式校验。坏数据会一路进入数据库，只在部分读取路径中兜底。
-- `apps/api/app/services.py:129-130` 把底层 AI 异常文本拼进用户可见回复，可能泄露供应商错误、网络细节或请求形态。
-- `apps/desktop/src/api.ts:109-111` 直接把完整后端错误 body 放进 Error，前端多处展示该字符串；这对个人本地工具可接受，但面向 NAS/LAN 时不利于安全和 UX。
-- `apps/api/tests/test_api.py` 覆盖了核心 API，但缺少迁移失败、SQLite 并发、鉴权/跨域、worker 与 API 启动顺序、前端构建/交互层测试。
+- 输入校验不足：`apps/api/app/schemas.py:107-110` 允许任意 `HabitLog.status`，`apps/api/app/schemas.py:120-128` 允许任意 `schedule_type`、`scheduled_time`，`apps/api/app/schemas.py:67-75` 允许任意 `schedule_days`。这些自由字符串会进入数据库，部分路径才兜底。
+- 调度错误不可观测：`apps/api/app/services.py:238` 直接解析 `scheduled_time`，非法值会抛异常；`apps/api/app/worker.py:14-18` 没有 try/except 包住 `dispatch_due_reminders`，一个坏提醒可能终止 worker。
+- 用户可见错误过细：`apps/api/app/services.py:129-130` 把 AI 调用异常文本拼进回复；`apps/desktop/src/api.ts:109-111` 把后端完整错误 body 直接抛给 UI。开发期方便，NAS/LAN 场景下不利于安全和体验。
+- `ReviewPage` 缺少 props 同步：`apps/desktop/src/pages/ReviewPage.tsx:6-8` 只用初始 `plan` 初始化 state，不像 `PlanPage` 在 `apps/desktop/src/pages/PlanPage.tsx:23-28` 用 `useEffect` 同步。若用户在数据刷新前进入复盘页，后续 plan 到达后表单不会自动填充已有复盘。
+- 文档有滞后信息：`CLAUDE.md` 仍描述 `Daily Companion`、`main.tsx` 单文件结构和 6 个测试；当前代码已经是 PlanKiller、页面拆分、测试数也已变化。
 
 4. Potential Bugs
 
-- 优先级语义反了：模型注释写 `priority: 1=低 2=中 3=高`，见 `apps/api/app/models.py:45`；前端也是 `3=高`，见 `apps/desktop/src/main.tsx:581-583`。但提醒上下文把 `priority == 1` 当作“高优先级未完成任务”，见 `apps/api/app/services.py:188`。这会导致提醒推送低优先级任务。
-- 周报习惯完成率没有考虑 `schedule_days`：`apps/api/app/services.py:372-390` 用 `active_habits * day_count` 作为分母。每周只安排 3 天的习惯会被按 7 天计算，完成率偏低。
-- `snooze_reminder` 使用 naive `datetime.now()`：`apps/api/app/routers/reminders.py:35`，而其他提醒调度使用配置时区 `ZoneInfo`。在 NAS/UTC 或混合 aware/naive datetime 下可能导致比较错误或延后时间偏移。
-- `/info` 在桌面 sidecar 下返回的 `db_path` 不是真实有效路径：`apps/api/app/routers/health.py:20-26` 用 `settings.database_url`，但实际数据库路径在 `apps/api/app/database.py:37-43` 会被 `DC_DATA_DIR` 覆盖。
-- `update_manual_memory` 无法清空 `target_date`：`apps/api/app/memory.py:252-269` 只有 `target_date is not None` 才更新，所以用户无法把已有日期改回空值。
-- `upsert_plan` 用 title 匹配保留 done 状态：`apps/api/app/routers/plans.py:34-59`。同一天重复标题会互相覆盖/丢失状态，重命名任务也会丢 done 状态。
+- 高: 桌面版自动提醒缺失。证据同上：Tauri sidecar 只启动 API，worker 只在 Docker Compose 中定义。影响是桌面安装版的核心提醒功能可能静默失效。
+- 高: 坏提醒数据可能让 worker 崩溃。`ReminderCreate` 不校验时间格式，`next_run_after` 在 `apps/api/app/services.py:238` 直接 split/int；worker 没有异常保护。
+- 中: 首页“连续打卡 N 天”语义错误。`apps/desktop/src/pages/HomePage.tsx:91-94` 显示连续打卡，但使用的是 `report.habit_logs`；该字段在 `apps/api/app/services.py:373-397` 是报告周期内 done 日志数，不是连续天数。
+- 中: `/info` 的 `db_path` 在 sidecar 模式不准确。实际数据库路径由 `DC_DATA_DIR` 覆盖，见 `apps/api/app/database.py:37-43`；但 `/info` 仍从 `settings.database_url` 计算，见 `apps/api/app/routers/health.py:19-26`。
+- 中: 前端 `today` 是模块加载时常量：`apps/desktop/src/utils.ts:8`。应用跨午夜不刷新时，`main.tsx:56-57`、`PlanPage.tsx:47`、`ReviewPage.tsx:13`、习惯打卡路径会继续写入旧日期。
+- 中: 提醒派发缺少幂等/并发保护。`apps/api/app/services.py:258-270` 先查 due reminders，再发送，再更新；多个进程或手动 endpoint 与 worker 并发时可能重复发送。
 
 5. Security Concerns
 
-- API 基本无认证，且 Docker 暴露 `8710:8710`：`infra/docker-compose.yml:9-10`。任何能访问 NAS/LAN 端口的人都可以读写计划、记忆、复盘，触发 AI、QQ 发送、重建索引。
-- CORS 全开放且允许 credentials：`apps/api/app/main.py:61-67`。配合无认证 API，任意网页可从用户浏览器访问本机/NAS API 并读取响应。
-- `/qq/webhook` 没有校验事件来源或签名，只处理 challenge 签名：`apps/api/app/routers/qq.py:31-67`。攻击者可伪造消息写入记忆、触发 AI 调用。
-- `/qq/send-test` 未鉴权：`apps/api/app/routers/qq.py:25-28`，可被任意请求触发 QQ 主动消息。
-- 前端把用户 AI Key 存在 `localStorage` 并通过 `X-AI-Key` 发送：`apps/desktop/src/api.ts:117-124`、`apps/desktop/src/main.tsx:1360-1368`。这符合当前需求，但如果用户把 API 地址改到不可信服务，会直接把 key 发给对方；同时 localStorage 对 XSS 没有防护。
-- Tauri CSP 关闭：`apps/desktop/src-tauri/tauri.conf.json:23-25`。当前权限较少，但 CSP 为 null 会扩大未来 XSS 的影响面。
+- API 无认证且 Docker 暴露端口：`infra/docker-compose.yml:9-10`。任何能访问 NAS/LAN 端口的人都能读写计划、记忆、复盘，触发 AI、QQ、reindex。
+- CORS 全开放并允许 credentials：`apps/api/app/main.py:61-67`。配合无认证 API，任意网页可从用户浏览器访问本机/NAS API。
+- QQ webhook 缺少事件来源校验：`apps/api/app/routers/qq.py:31-67` 只处理 challenge 签名，没有对普通事件做签名/来源验证。攻击者可伪造消息写入记忆或触发 AI 调用。
+- `/qq/send-test` 未鉴权：`apps/api/app/routers/qq.py:25-28`，可被任意可访问 API 的请求触发 QQ 发送。
+- 用户 AI Key 存在 `localStorage` 并会转发到用户配置的 API 地址：`apps/desktop/src/api.ts:117-124`、`apps/desktop/src/pages/SettingsPage.tsx:27-31`。若 API 地址被改为不可信服务，key 会泄露。
+- Tauri CSP 关闭：`apps/desktop/src-tauri/tauri.conf.json:23-25`。当前前端没有明显 `dangerouslySetInnerHTML`，但 CSP 为 null 会扩大未来 XSS 的影响面。
 
 6. Prioritized Recommendations
 
-1. 先补最小访问控制：至少为 NAS/API 写接口、AI、QQ、memory reindex 增加本地 token 或配置型 API key；同时把 CORS 收敛到桌面/Vite/NAS 前端来源。
-2. 修复真实行为 bug：`priority == 1` 改为 `priority == 3`；周报习惯分母按 `schedule_days` 计算；snooze 使用 `today_in_timezone` 同源时区。
-3. 把迁移机制正规化：引入轻量 schema version 表或 Alembic；API 和 worker 启动共用迁移路径；迁移失败必须日志可见。
-4. 降低 SQLite 并发风险：配置 WAL/busy timeout，避免 HTTP 请求中长时间同步 reindex；必要时把 RAG 重建放进后台任务。
-5. 拆分大文件：前端按页面拆 `HomePage/PlanPage/HabitPage/MemoryPage/SettingsPage`；后端把 AI、QQ、reminder、report、time 分成独立 service 模块。
-6. 增加测试：优先覆盖 priority 提醒、schedule_days 周报分母、`/info` 桌面路径、webhook 鉴权、手动记忆清空日期、重复标题 upsert 行为。
+1. 先修桌面提醒架构：Tauri sidecar 同时启动 worker，或把调度 loop 纳入 API lifespan，并确保关闭窗口时一起退出。
+2. 给 API 加最小访问控制：至少为写接口、AI、QQ、memory reindex 增加本地 token；同时收窄 CORS 到 Vite、本机 Tauri、NAS 前端来源。
+3. 正规化迁移：引入 schema version 表或 Alembic；API 和 worker 共用迁移入口；迁移失败记录日志并阻止继续启动。
+4. 加强提醒健壮性：校验 `scheduled_time`、`schedule_type`、`HabitLog.status`、`schedule_days`；worker loop 捕获单轮异常并记录，不让一个坏数据终止进程。
+5. 修复当前 UI 语义 bug：把“连续打卡”改成“本周打卡次数”，或后端增加真正 streak 字段；`ReviewPage` 按 `plan` 变化同步表单。
+6. 降低 SQLite 并发风险：配置 WAL/busy timeout；提醒派发增加领取/锁定状态；RAG reindex 改后台任务或增量更新。
+7. 补测试：桌面提醒启动路径、非法提醒数据、重复派发、`/info` sidecar 路径、首页 streak 文案、ReviewPage 异步加载回填。
 
-未运行测试或构建：本次按你的规则做只读审计，且现有交接记录显示当前环境对 pytest 数据库目录和 Vite 临时目录有写权限限制。
+未运行测试/构建：本次按要求只读审计；后端 pytest 会写 `apps/api/data/test_plankiller.db`，前端 build 会写 Vite/dist 临时产物，不适合在本轮执行。

@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { DailyPlan, Habit, WeeklyReport, apiRequest, defaultApiBase } from "./api";
-import { localDateStr, today } from "./utils";
+import { localDateStr } from "./utils";
 import HomePage from "./pages/HomePage";
 import PlanPage from "./pages/PlanPage";
 import ReviewPage from "./pages/ReviewPage";
@@ -53,8 +53,8 @@ function App() {
       // 并行拉取所有初始数据，减少等待时间
       const [habitsData, todayPlans, historyData, reportData] = await Promise.all([
         apiRequest<Habit[]>("/habits", {}, apiBase),
-        apiRequest<DailyPlan[]>(`/plans?start=${today}&end=${today}`, {}, apiBase),
-        apiRequest<DailyPlan[]>(`/plans?start=${thirtyDaysAgo}&end=${today}`, {}, apiBase),
+        apiRequest<DailyPlan[]>(`/plans?start=${localDateStr()}&end=${localDateStr()}`, {}, apiBase),
+        apiRequest<DailyPlan[]>(`/plans?start=${thirtyDaysAgo}&end=${localDateStr()}`, {}, apiBase),
         apiRequest<WeeklyReport>("/ai/reports/weekly", {}, apiBase),
       ]);
       setHabits(habitsData);
@@ -73,12 +73,12 @@ function App() {
   }
 
   async function logHabitFromHome(id: number, status: "done" | "skip") {
-    await apiRequest(`/habits/${id}/logs`, { method: "POST", body: JSON.stringify({ log_date: today, status }) }, apiBase);
+    await apiRequest(`/habits/${id}/logs`, { method: "POST", body: JSON.stringify({ log_date: localDateStr(), status }) }, apiBase);
     await refresh();
   }
 
   async function undoHabitFromHome(id: number) {
-    await apiRequest(`/habits/${id}/logs/${today}`, { method: "DELETE" }, apiBase);
+    await apiRequest(`/habits/${id}/logs/${localDateStr()}`, { method: "DELETE" }, apiBase);
     await refresh();
   }
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { DailyPlan, apiRequest } from "../api";
-import { today } from "../utils";
+import { localDateStr } from "../utils";
 
 type ItemDraft = { id?: number; title: string; start_time: string; end_time: string; priority: number; category: string };
 
@@ -44,7 +44,7 @@ function PlanPage({ apiBase, plan, onSaved }: { apiBase: string; plan: DailyPlan
     setSaveStatus("saving");
     try {
       const payload = {
-        plan_date: today,
+        plan_date: localDateStr(),
         focus,
         energy_level: 3,
         notes,
@@ -85,7 +85,7 @@ function PlanPage({ apiBase, plan, onSaved }: { apiBase: string; plan: DailyPlan
     <div>
       <header className="pageHeader">
         <h1>今日计划</h1>
-        <p>{today}</p>
+        <p>{localDateStr()}</p>
       </header>
       <div className="grid gridTwo">
         <div className="panel">

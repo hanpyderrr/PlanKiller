@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Habit, apiRequest } from "../api";
-import { today } from "../utils";
+import { localDateStr } from "../utils";
 
 function EmojiPicker({ value, onChange }: { value: string; onChange: (e: string) => void }) {
   const EMOJIS = ["✨","🏃","📚","🧘","💧","💪","🎯","📝","🍎","🌙","⭐","🔥","🎵","🧹","🛁","💊"];
@@ -118,12 +118,12 @@ function HabitPage({ apiBase, habits, onSaved }: { apiBase: string; habits: Habi
   }
 
   async function logHabit(id: number, status: "done" | "skip") {
-    await apiRequest(`/habits/${id}/logs`, { method: "POST", body: JSON.stringify({ log_date: today, status }) }, apiBase);
+    await apiRequest(`/habits/${id}/logs`, { method: "POST", body: JSON.stringify({ log_date: localDateStr(), status }) }, apiBase);
     onSaved();
   }
 
   async function undoHabit(id: number) {
-    await apiRequest(`/habits/${id}/logs/${today}`, { method: "DELETE" }, apiBase);
+    await apiRequest(`/habits/${id}/logs/${localDateStr()}`, { method: "DELETE" }, apiBase);
     onSaved();
   }
 

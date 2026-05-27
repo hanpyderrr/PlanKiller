@@ -8,15 +8,23 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger("plankiller-worker")
 
 
-async def run_forever() -> None:
-    init_db()
+async def reminder_loop() -> None:
+    """Reminder dispatch loop — runs as a background asyncio task inside FastAPI lifespan."""
     logger.info("Reminder worker started")
     while True:
-        with SessionLocal() as db:
-            sent = await dispatch_due_reminders(db)
-            if sent:
-                logger.info("Dispatched %s reminder(s)", sent)
+        try:
+            with SessionLocal() as db:
+                sent = await dispatch_due_reminders(db)
+                if sent:
+                    logger.info("Dispatched %s reminder(s)", sent)
+        except Exception:
+            logger.exception("reminder dispatch error")
         await asyncio.sleep(30)
+
+
+async def run_forever() -> None:
+    init_db()
+    await reminder_loop()
 
 
 if __name__ == "__main__":

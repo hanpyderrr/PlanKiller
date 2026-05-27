@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { DailyPlan } from "../api";
-import { today } from "../utils";
+import { localDateStr } from "../utils";
 
 function HistoryPage({ history }: { history: DailyPlan[] }) {
   const [showList, setShowList] = useState(false);
@@ -72,8 +72,8 @@ function HistoryPage({ history }: { history: DailyPlan[] }) {
           {Array.from({ length: daysInMonth }, (_, i) => {
             const day = i + 1;
             const dateStr = `${currentMonth}-${String(day).padStart(2, "0")}`;
-            const isFuture = dateStr > today;
-            const isToday = dateStr === today;
+            const isFuture = dateStr > localDateStr();
+            const isToday = dateStr === localDateStr();
             const p = dayMap.get(dateStr);
             const pct = p && p.items.length > 0
               ? Math.round((p.items.filter((it) => it.done).length / p.items.length) * 100)

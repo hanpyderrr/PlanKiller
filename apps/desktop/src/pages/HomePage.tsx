@@ -90,7 +90,7 @@ function HomePage({
         <div className="homeHeaderRight">
           <div className="streakBadge">
             <span>🔥</span>
-            连续打卡 {report?.habit_logs ?? 0} 天
+            本周打卡 {report?.habit_logs ?? 0} 次
           </div>
           <div className="avatar" style={{ cursor: "pointer" }} onClick={onGoToSettings} title="前往设置">你</div>
         </div>

@@ -5,4 +5,3 @@ export function localDateStr(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
-export const today = localDateStr();
