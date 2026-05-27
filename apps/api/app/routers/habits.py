@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..memory import delete_source_document, sync_habit_log_memory
 from ..models import Habit, HabitLog
 from ..schemas import HabitCreate, HabitLogCreate, HabitLogRead, HabitRead, HabitReorderRequest, HabitUpdate
 from ..services import today_in_timezone
@@ -104,6 +105,7 @@ def log_habit(habit_id: int, payload: HabitLogCreate, db: Session = Depends(get_
     log.note = payload.note
     db.commit()
     db.refresh(log)
+    sync_habit_log_memory(db, log)
     return log
 
 
@@ -124,5 +126,7 @@ def delete_habit_log(habit_id: int, log_date: date, db: Session = Depends(get_db
     log = db.scalar(select(HabitLog).where(HabitLog.habit_id == habit_id, HabitLog.log_date == log_date))
     if log is None:
         raise HTTPException(status_code=404, detail="Log not found")
+    log_id = log.id
     db.delete(log)
     db.commit()
+    delete_source_document(db, "habit_log", log_id)

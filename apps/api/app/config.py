@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    openai_base_url: str = "https://api.openai.com"
     openai_embedding_model: str = "text-embedding-3-small"
     rag_enabled: bool = True
     rag_top_k: int = 5

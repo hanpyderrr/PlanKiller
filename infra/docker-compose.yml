@@ -6,6 +6,8 @@ services:
     env_file:
       - path: ../.env
         required: false
+    environment:
+      - DISABLE_EMBEDDED_WORKER=true
     ports:
       - "8710:8710"
     volumes:

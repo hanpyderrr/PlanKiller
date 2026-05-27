@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db
+from ..memory import sync_plan_memory, sync_review_memory
 from ..models import DailyPlan, DailyReview, PlanItem
 from ..schemas import DailyPlanCreate, DailyPlanRead, DailyReviewCreate, PlanItemUpdate
 
@@ -70,7 +71,10 @@ def upsert_plan(payload: DailyPlanCreate, db: Session = Depends(get_db)) -> Dail
             db.delete(item)
     plan.items = new_items
     db.commit()
-    return _load_plan(db, payload.plan_date)  # type: ignore[return-value]
+    loaded = _load_plan(db, payload.plan_date)
+    if loaded:
+        sync_plan_memory(db, loaded)
+    return loaded  # type: ignore[return-value]
 
 
 @router.get("/{plan_date}", response_model=DailyPlanRead)
@@ -91,7 +95,10 @@ def update_item(item_id: int, payload: PlanItemUpdate, db: Session = Depends(get
         setattr(item, field, value)
     db.commit()
     plan = db.get(DailyPlan, item.plan_id)
-    return _load_plan(db, plan.plan_date)  # type: ignore[union-attr,return-value]
+    loaded = _load_plan(db, plan.plan_date)  # type: ignore[union-attr]
+    if loaded:
+        sync_plan_memory(db, loaded)
+    return loaded  # type: ignore[return-value]
 
 
 @router.delete("/items/{item_id}", status_code=204)
@@ -118,7 +125,10 @@ def submit_review(plan_date: date, payload: DailyReviewCreate, db: Session = Dep
     db.add(review)
     db.commit()
     db.expire_all()
-    return _load_plan(db, plan_date)  # type: ignore[return-value]
+    loaded = _load_plan(db, plan_date)
+    if loaded and loaded.review:
+        sync_review_memory(db, loaded.review)
+    return loaded  # type: ignore[return-value]
 
 
 @router.get("", response_model=list[DailyPlanRead])

@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from .config import get_settings
-from .memory import reindex_memory
+from .memory import sync_insight_memory
 from .models import AiConversation, AiInsight, DailyPlan, Habit, HabitLog, Reminder, ReminderDelivery
 from .schemas import MemoryHit
 
@@ -80,7 +80,7 @@ async def ask_ai(
     settings = get_settings()
     if override_api_key:
         api_key = override_api_key
-        base_url = "https://api.openai.com"
+        base_url = settings.openai_base_url
         model = settings.openai_model
         provider = "openai-user-key"
     elif settings.deepseek_api_key:
@@ -90,7 +90,7 @@ async def ask_ai(
         provider = "deepseek"
     elif settings.openai_api_key:
         api_key = settings.openai_api_key
-        base_url = "https://api.openai.com"
+        base_url = settings.openai_base_url
         model = settings.openai_model
         provider = "openai"
     else:
@@ -435,7 +435,7 @@ def save_weekly_insight(db: Session, content: str, target: date | None = None) -
     db.add(insight)
     db.commit()
     db.refresh(insight)
-    reindex_memory(db)
+    sync_insight_memory(db, insight)
     return insight
 
 
@@ -450,5 +450,5 @@ def save_reminder_reply_memory(db: Session, raw_text: str, parsed: dict[str, obj
     db.add(insight)
     db.commit()
     db.refresh(insight)
-    reindex_memory(db)
+    sync_insight_memory(db, insight)
     return insight

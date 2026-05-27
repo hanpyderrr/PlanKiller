@@ -6,6 +6,7 @@ function HistoryPage({ history }: { history: DailyPlan[] }) {
   const [showList, setShowList] = useState(false);
 
   const now = new Date();
+  const todayStr = localDateStr(now);
   const year = now.getFullYear();
   const month = now.getMonth(); // 0-indexed
   const currentMonth = `${year}-${String(month + 1).padStart(2, "0")}`;
@@ -72,8 +73,8 @@ function HistoryPage({ history }: { history: DailyPlan[] }) {
           {Array.from({ length: daysInMonth }, (_, i) => {
             const day = i + 1;
             const dateStr = `${currentMonth}-${String(day).padStart(2, "0")}`;
-            const isFuture = dateStr > localDateStr();
-            const isToday = dateStr === localDateStr();
+            const isFuture = dateStr > todayStr;
+            const isToday = dateStr === todayStr;
             const p = dayMap.get(dateStr);
             const pct = p && p.items.length > 0
               ? Math.round((p.items.filter((it) => it.done).length / p.items.length) * 100)

@@ -55,10 +55,14 @@ async def lifespan(app: FastAPI):
             pass
     with SessionLocal() as db:
         seed_default_reminders(db)
-    _worker_task = asyncio.create_task(reminder_loop())
+    import os as _os
+    _worker_task = None
+    if not _os.environ.get("DISABLE_EMBEDDED_WORKER"):
+        _worker_task = asyncio.create_task(reminder_loop())
     yield
-    _worker_task.cancel()
-    await asyncio.gather(_worker_task, return_exceptions=True)
+    if _worker_task is not None:
+        _worker_task.cancel()
+        await asyncio.gather(_worker_task, return_exceptions=True)
 
 
 app = FastAPI(title="PlanKiller API", version="0.1.0", lifespan=lifespan)

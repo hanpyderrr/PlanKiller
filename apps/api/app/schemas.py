@@ -1,6 +1,7 @@
 # HTTP 请求/响应的数据校验模型（Pydantic）
 # 命名规则：xxxCreate = 写入时的入参，xxxRead = 返回给前端的出参，xxxUpdate = 局部更新
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -67,7 +68,7 @@ class DailyPlanRead(BaseModel):
 class HabitCreate(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     description: str = ""
-    schedule_type: str = "daily"
+    schedule_type: Literal["daily", "workday", "weekly"] = "daily"
     reminder_time: str = "09:00"
     active: bool = True
     emoji: str = "✨"
@@ -87,7 +88,7 @@ class HabitRead(HabitCreate):
 class HabitUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=160)
     description: str | None = None
-    schedule_type: str | None = None
+    schedule_type: Literal["daily", "workday", "weekly"] | None = None
     reminder_time: str | None = None
     active: bool | None = None
     emoji: str | None = None
@@ -106,7 +107,7 @@ class HabitReorderRequest(BaseModel):
 
 class HabitLogCreate(BaseModel):
     log_date: date
-    status: str = "done"
+    status: Literal["done", "skip"] = "done"
     note: str = ""
 
 
@@ -120,8 +121,8 @@ class HabitLogRead(HabitLogCreate):
 class ReminderCreate(BaseModel):
     title: str
     message: str
-    schedule_type: str = "once"
-    scheduled_time: str = "09:00"
+    schedule_type: Literal["once", "daily", "workday", "weekly"] = "once"
+    scheduled_time: str = Field(default="09:00", pattern=r"^\d{2}:\d{2}$")
     next_run_at: datetime | None = None
     target_type: str = "general"
     target_id: int | None = None

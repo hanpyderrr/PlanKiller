@@ -199,6 +199,62 @@ def _replace_chunks(document: MemoryDocument, content: str) -> None:
         )
 
 
+def upsert_source_document(
+    db: Session,
+    source_type: str,
+    source_id: int,
+    title: str,
+    content: str,
+    target_date: date | None,
+) -> None:
+    document = db.scalar(
+        select(MemoryDocument).where(
+            MemoryDocument.source_type == source_type,
+            MemoryDocument.source_id == source_id,
+        )
+    )
+    if document is None:
+        _add_document(db, source_type, source_id, title, content, target_date)
+    else:
+        document.title = title
+        document.content = content
+        document.target_date = target_date
+        _replace_chunks(document, content)
+    db.commit()
+
+
+def delete_source_document(db: Session, source_type: str, source_id: int) -> None:
+    document = db.scalar(
+        select(MemoryDocument).where(
+            MemoryDocument.source_type == source_type,
+            MemoryDocument.source_id == source_id,
+        )
+    )
+    if document is not None:
+        db.delete(document)
+        db.commit()
+
+
+def sync_plan_memory(db: Session, plan: DailyPlan) -> None:
+    title, content, target_date = _render_plan(plan)
+    upsert_source_document(db, "daily_plan", plan.id, title, content, target_date)
+
+
+def sync_review_memory(db: Session, review: DailyReview) -> None:
+    title, content, target_date = _render_review(review)
+    upsert_source_document(db, "daily_review", review.id, title, content, target_date)
+
+
+def sync_habit_log_memory(db: Session, log: HabitLog) -> None:
+    title, content, target_date = _render_habit_log(log)
+    upsert_source_document(db, "habit_log", log.id, title, content, target_date)
+
+
+def sync_insight_memory(db: Session, insight: AiInsight) -> None:
+    title, content, target_date = _render_ai_insight(insight)
+    upsert_source_document(db, "ai_insight", insight.id, title, content, target_date)
+
+
 def reindex_memory(db: Session) -> dict[str, int]:
     auto_docs = db.scalars(select(MemoryDocument).where(MemoryDocument.source_type != "manual")).all()
     for document in auto_docs:
